@@ -1,4 +1,3 @@
-const { Client } = require('@elastic/elasticsearch');
 const { Kafka } = require('kafkajs');
 
 const kafka = new Kafka({
@@ -6,93 +5,54 @@ const kafka = new Kafka({
     brokers: ['localhost:9092'],
 });
 
-const consumer = kafka.consumer({ groupId: 'search-logs-group' });
+const consumer = kafka.consumer({ groupId: 'consumer-group' });
+const pendingJobs = new Map(); // Map lưu các Promise đang chờ
 
-const client = new Client({
-    node: 'https://172.30.34.103:9200',
-    // node: 'localhost:9200',
-    auth: {
-        username: 'elastic',
-        password: 'CsslKFJU2++JqoTGOv_v',
-    },
-    ssl: {
-        rejectUnauthorized: false,
-    },
-    tls: {
-        rejectUnauthorized: false,
-    }
-});
-
-const indexName = 'user-logs';
-const batchSize = 1000;
-let buffer = [];
-
-// Kiểm tra và tạo index nếu chưa tồn tại
-const ensureIndexExists = async () => {
-    const indexExists = await client.indices.exists({ index: indexName });
-    if (!indexExists.body) {
-        await client.indices.create({
-            index: indexName,
-            body: {
-                mappings: {
-                    properties: {
-                        userId: { type: 'keyword' },
-                        keyword: { type: 'text' },
-                        timestamp: { type: 'date' }
-                    }
-                }
-            }
-        });
-        console.log(`Index '${indexName}' created.`);
-    } else {
-        console.log(`Index '${indexName}' already exists.`);
-    }
-};
-
-// Function để import dữ liệu vào Elasticsearch
-const importToES = async (docs) => {
-    try {
-        const result = await client.helpers.bulk({
-            datasource: docs,
-            onDocument: (doc) => ({ index: { _index: indexName, _id: `${doc.userId}-${doc.timestamp}` } }),
-        });
-
-        console.log(`Indexed batch with ${result.successful} documents, ${result.failed} failed.`);
-    } catch (error) {
-        console.error('Error importing documents to Elasticsearch:', error);
-    }
-};
-
-// Consumer để nhận message và xử lý batch
-const runConsumer = async () => {
+async function startConsumer() {
     await consumer.connect();
-    await consumer.subscribe({ topic: 'search-logs', fromBeginning: true });
+    await consumer.subscribe({ topic: 'search-res', fromBeginning: true });
+    await consumer.subscribe({ topic: 'personal-data-res', fromBeginning: true });
 
-    // Kiểm tra và tạo index nếu cần trước khi chạy consumer
-    await ensureIndexExists();
+    console.log('Consumer started.');
 
     await consumer.run({
-        eachMessage: async ({ message }) => {
-            const data = JSON.parse(message.value.toString());
-            buffer.push(data);
+        eachMessage: async ({ topic, partition, message }) => {
+            const value = message.value.toString();
+            try {
+                const data = JSON.parse(value); // Giả định message là JSON
+                const { jobId } = data;
 
-            // Nhập dữ liệu vào Elasticsearch theo batch
-            if (buffer.length >= batchSize) {
-                await importToES(buffer);
-                buffer = []; // Xóa buffer sau khi bulk
+                if (jobId && pendingJobs.has(jobId)) {
+                    // Resolve promise cho jobId đang chờ
+                    pendingJobs.get(jobId).resolve(data);
+                    pendingJobs.delete(jobId); // Xóa jobId khỏi danh sách chờ
+                }
+            } catch (err) {
+                console.error(`Failed to process message: ${value}`, err);
             }
         },
     });
+}
 
-    // Xử lý các document còn lại khi kết thúc
-    process.on('SIGINT', async () => {
-        if (buffer.length > 0) {
-            await importToES(buffer);
+// API xử lý request
+function waitForJobId(jobId) {
+    return new Promise((resolve, reject) => {
+        if (pendingJobs.has(jobId)) {
+            reject(new Error(`JobId ${jobId} is already being processed.`));
+            return;
         }
-        await consumer.disconnect();
-        process.exit(0);
-    });
-};
 
-// Xuất hàm chạy consumer
-module.exports = { runConsumer };
+        // Lưu Promise vào Map
+        pendingJobs.set(jobId, { resolve, reject });
+
+        // Timeout để tránh chờ mãi mãi nếu không có message nào tới
+        setTimeout(() => {
+            if (pendingJobs.has(jobId)) {
+                pendingJobs.get(jobId).reject(new Error(`Timeout waiting for jobId: ${jobId}`));
+                pendingJobs.delete(jobId);
+            }
+        }, 5000); // Timeout sau 5 giây (có thể tùy chỉnh)
+    });
+}
+
+module.exports = { startConsumer, waitForJobId };

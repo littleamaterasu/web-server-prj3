@@ -22,6 +22,30 @@ const sendLogToKafka = (logMessage, callback) => {
     callback(null, "b");
 };
 
+const search = (data, callback) => {
+    const payloads = [
+        { topic: 'search', messages: JSON.stringify(data) }
+    ]
+
+    producer.send(payloads, (err, data) => {
+        callback(err, data);
+    });
+    callback(null, "b");
+}
+
+const getPersonalData = (data, callback) => {
+    const payloads = [
+        { topic: 'personal-data', messages: JSON.stringify(data) }
+    ]
+
+    producer.send(payloads, (err, data) => {
+        callback(err, data);
+    });
+    callback(null, "b");
+}
+
 module.exports = {
-    sendLogToKafka
+    sendLogToKafka,
+    search,
+    getPersonalData
 }
