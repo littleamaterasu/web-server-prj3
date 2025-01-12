@@ -11,7 +11,7 @@ app.use(express.json());
 app.use(cookieParser()); // Use cookie-parser middleware
 
 app.use(cors({
-    origin: 'http://192.168.100.1:5173', // Địa chỉ của frontend
+    origin: '*', // Địa chỉ của frontend
     methods: ['GET', 'POST'], // Các phương thức cho phép
     credentials: true // Nếu bạn cần gửi cookie
 }));
@@ -38,29 +38,20 @@ app.post('/search', async (req, res) => {
         return res.status(400).send('Missing search keyword');
     }
 
-    // Ghi log từ khóa tìm kiếm
-    const logMessage = {
+    // Gửi tới consumer tại es để tìm dữ liệu
+    const dto = {
+        jobId: jobId,
         uid: userId,
-        timestamp: new Date().toISOString(),
         keywords: searchKeyword,
-        cookie: req.cookies,
+        from: req.body.from,
+        to: req.body.to,
     };
-
-    // Gửi log tới logs service
-    producerService.sendLogToKafka(logMessage, (err, result) => {
+    console.log(dto);
+    producerService.search(dto, (err, result) => {
         if (err) {
             console.error('Failed to send log to Kafka:', err);
             return res.status(500).send('Failed to send log');
         }
-    });
-
-    // Gửi tới consumer tại es để tìm dữ liệu
-    producerService.search({
-        jobId: jobId,
-        uid: logMessage.uid,
-        keywords: logMessage.keywords,
-        from: req.from,
-        to: req.to
     })
 
     // Đợi data gửi về
@@ -70,13 +61,14 @@ app.post('/search', async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
+
 });
+
 
 // lấy sở thích người dùng
 app.post('/personal', async (req, res) => {
     ++jobId;
     console.log("job ID", jobId, req.body);
-    const searchKeyword = req.body.keyword;
 
     // Check for userId in cookies
     let userId = req.cookies.userId;
@@ -93,7 +85,7 @@ app.post('/personal', async (req, res) => {
         uid: userId
     }
 
-    producerService.getPersonalData(data, (err, result) => {
+    producerService.getPreference(data, (err, result) => {
         if (err) {
             console.error('Failed to send log to Kafka:', err);
             return res.status(500).send('Failed to send log');

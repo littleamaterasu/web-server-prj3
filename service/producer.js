@@ -1,6 +1,7 @@
 const kafka = require('kafka-node');
+require('dotenv').config();
 
-const client = new kafka.KafkaClient({ kafkaHost: 'localhost:9092' });
+const client = new kafka.KafkaClient({ kafkaHost: process.env.KAFKA_HOST });
 const producer = new kafka.Producer(client);
 
 producer.on('ready', function () {
@@ -10,17 +11,6 @@ producer.on('ready', function () {
 producer.on('error', function (err) {
     console.error('Kafka Producer error:', err);
 });
-
-const sendLogToKafka = (logMessage, callback) => {
-    const payloads = [
-        { topic: 'search-logs', messages: JSON.stringify(logMessage), partition: 0 },
-    ];
-
-    producer.send(payloads, (err, data) => {
-        callback(err, data);
-    });
-    callback(null, "b");
-};
 
 const search = (data, callback) => {
     const payloads = [
@@ -33,9 +23,9 @@ const search = (data, callback) => {
     callback(null, "b");
 }
 
-const getPersonalData = (data, callback) => {
+const getPreference = (data, callback) => {
     const payloads = [
-        { topic: 'personal-data', messages: JSON.stringify(data) }
+        { topic: 'preference', messages: JSON.stringify(data) }
     ]
 
     producer.send(payloads, (err, data) => {
@@ -45,7 +35,6 @@ const getPersonalData = (data, callback) => {
 }
 
 module.exports = {
-    sendLogToKafka,
     search,
-    getPersonalData
+    getPreference
 }

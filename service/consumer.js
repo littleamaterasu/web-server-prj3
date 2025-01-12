@@ -1,22 +1,28 @@
 const { Kafka } = require('kafkajs');
+require('dotenv').config();
 
 const kafka = new Kafka({
     clientId: 'my-consumer',
-    brokers: ['localhost:9092'],
+    brokers: process.env.KAFKA_HOST.split(','),
 });
 
-const consumer = kafka.consumer({ groupId: 'consumer-group' });
+const consumer = kafka.consumer({ groupId: process.env.KAFKA_GROUP_ID });
 const pendingJobs = new Map(); // Map lưu các Promise đang chờ
 
 async function startConsumer() {
     await consumer.connect();
-    await consumer.subscribe({ topic: 'search-res', fromBeginning: true });
-    await consumer.subscribe({ topic: 'personal-data-res', fromBeginning: true });
+
+    // test
+    // await consumer.subscribe({ topic: 'search', fromBeginning: true });
+
+    // actual response
+    await consumer.subscribe({ topic: 'api-res', fromBeginning: true });
 
     console.log('Consumer started.');
 
     await consumer.run({
         eachMessage: async ({ topic, partition, message }) => {
+            console.log('received message', partition)
             const value = message.value.toString();
             try {
                 const data = JSON.parse(value); // Giả định message là JSON
