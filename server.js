@@ -7,6 +7,7 @@ const cookieParser = require('cookie-parser'); // Import cookie-parser
 
 const app = express();
 const server = http.createServer(app);
+require('dotenv').config();
 app.use(express.json());
 app.use(cookieParser()); // Use cookie-parser middleware
 
@@ -17,6 +18,8 @@ app.use(cors({
 }));
 
 let jobId = 0;
+
+console.log('server', 'es url', process.env.ES_URL, 'kafka broker', process.env.KAFKA_HOST)
 
 // tìm kiếm
 app.post('/search', async (req, res) => {
@@ -99,6 +102,10 @@ app.post('/personal', async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
+})
+
+app.get('/', async (req, res) => {
+    res.status(200).json('ok')
 })
 
 // Function to generate a unique user ID (this is just an example)

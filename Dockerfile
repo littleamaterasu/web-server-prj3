@@ -1,20 +1,27 @@
-# Sử dụng image Node.js chính thức
+# Use the official Node.js image from Docker Hub
 FROM node:latest
 
-# Thiết lập thư mục làm việc trong container
-WORKDIR /app
+# Install dependencies
+RUN apt-get update && apt-get install -y wget curl
 
-# Sao chép package.json và package-lock.json vào container
+# Download and install wait-for-it
+RUN curl -o /usr/local/bin/wait-for-it https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh && \
+    chmod +x /usr/local/bin/wait-for-it
+
+# Set the working directory inside the container
+WORKDIR /usr/src/server
+
+# Copy package.json and package-lock.json (if available)
 COPY package*.json ./
 
-# Cài đặt các phụ thuộc
+# Install the dependencies
 RUN npm install
 
-# Sao chép toàn bộ mã nguồn vào container
+# Copy the rest of the application files
 COPY . .
 
-# Expose cổng 3010
+# Expose the application port (adjust as needed)
 EXPOSE 3010
 
-# Lệnh để chạy ứng dụng
-CMD ["node", "server.js"]
+# Command to run the application
+CMD ["npm", "run", "server"]
